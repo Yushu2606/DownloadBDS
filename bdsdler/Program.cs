@@ -1,100 +1,93 @@
-﻿using System.Net;
+using System.Net;
 
-int interval = 200;
-Directory.CreateDirectory("dlbds");
-Directory.CreateDirectory("dlbds/bds-win");
-Directory.CreateDirectory("dlbds/bds-linux");
-Console.Write("开始自");
-string input = Console.ReadLine() ?? string.Empty;
-bool first = true;
-List<string> key = new();
-switch (input)
+List<int> version = new()
 {
-    case "relog":
+    1,
+    6,
+    0,
+    0
+};
+List<string> platforms = new()
+{
+    "win",
+    "linux"
+};
+List<Task> tasks = new();
+
+Console.Write("开始自：");
+string? input = Console.ReadLine();
+Console.Clear();
+if (!string.IsNullOrWhiteSpace(input))
+{
+    string[] temp = input.Split('.');
+    for (int i = 0; i < temp.Length; i++)
+    {
+        version[i] = Convert.ToInt32(temp[i]);
+    }
+}
+foreach (string platform in platforms)
+{
+    _ = Directory.CreateDirectory(platform);
+}
+for (int i = 0; i < 16; i++)
+{
+    int index = i;
+    Task task = new(() =>
+    {
+        while (version[1] <= 20)
         {
-            List<string> file = File.ReadAllLines("log.log").ToList();
-            foreach (string line in new List<string>(file))
+            Download(platforms, version, index);
+        }
+    });
+    task.Start();
+    tasks.Add(task);
+}
+foreach (Task task1 in tasks)
+{
+    task1.Wait();
+}
+Console.SetCursorPosition(0, 16);
+Console.WriteLine("下载完毕");
+
+static void Download(List<string> platforms, List<int> version, int index)
+{
+    string versionstr = $"{version[0]}.{version[1]}.{version[2]}.{(((version[1] >= 16 && version[2] >= 1) || version[1] >= 17) && version[3] is < 10 and > 0 ? $"0{version[3]}" : version[3])}";
+    version[3]++;
+    if (version[3] > 35)
+    {
+        version[3] = 0;
+        version[2]++;
+    }
+    if (version[2] > (version[1] <= 13 ? 5 : 222))
+    {
+        version[2] = 0;
+        version[1]++;
+    }
+    if (version[1] > 20)
+    {
+        version[1]++;
+        return;
+    }
+    foreach (string platform in platforms)
+    {
+        try
+        {
+            lock (Console.Out)
             {
-                if (string.IsNullOrWhiteSpace(line))
-                {
-                    continue;
-                }
-                string pt = line.Split('-')[0];
-                string filename = line.Split("下载失败")[0][(pt.Length + 1)..];
-                _ = Task.Run(() =>
-                {
-                    _ = dl(pt, filename);
-                });
-                _ = file.Remove(line);
-                File.WriteAllLines("log.log", file);
-                Thread.Sleep(interval);
+                Console.SetCursorPosition(0, index);
+                Console.WriteLine($"{index}    {platform}    {versionstr}    ");
+                Console.SetCursorPosition(0, 0);
             }
-            Console.Out.WriteLine("任务创建完毕");
-            while (true)
+            new WebClient().DownloadFile($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{versionstr}.zip", Path.Combine(platform, $"bedrock-server-{versionstr}.zip"));
+            File.AppendAllText($"bds_ver_{platform}.json", $"{versionstr}\n");
+        }
+        catch (Exception ex)
+        {
+            if (ex.Message.Contains("404"))
             {
-                _ = Console.ReadKey(false);
+                continue;
             }
-        }
-
-    default:
-        if (input != string.Empty)
-        {
-            key.AddRange(input.Split('.'));
-        }
-        else
-        {
-            first = false;
-        }
-
-        break;
-}
-for (int i2 = 6; i2 <= 20; ++i2)
-{
-    if (first) { i2 = Convert.ToInt32(key[0]); }
-    for (int i3 = 0; i3 <= (i2 <= 13 ? 5 : 222); ++i3)
-    {
-        if (first) { i3 = Convert.ToInt32(key[1]); }
-        for (int i4 = 0; i4 <= 35; ++i4)
-        {
-            if (first) { i4 = Convert.ToInt32(key[2]); first = false; }
-            string ver = $"1.{i2}.{i3}.{(((i2 >= 16 && i3 >= 1) || i2 >= 17) && i4 is < 10 and > 0 ? $"0{i4}" : i4)}";
-            _ = Task.Run(() =>
-            {
-                _ = dl("win", ver);
-            });
-            Thread.Sleep(interval);
-            _ = Task.Run(() =>
-            {
-                _ = dl("linux", ver);
-            });
-            Thread.Sleep(interval);
+            Download(platforms, version, index);
         }
     }
-}
-Console.Out.WriteLine("任务创建完毕");
-while (true)
-{
-    _ = Console.ReadKey(false);
-}
-
-static bool dl(string pt, string ver)
-{
-    try
-    {
-        Console.Out.WriteLine($"开始下载{pt}-{ver}");
-        new WebClient().DownloadFile($"https://minecraft.azureedge.net/bin-{pt}/bedrock-server-{ver}.zip", $"dlbds/bds-{pt}/bedrock-server-{ver}.zip");
-        File.AppendAllLines($"dlbds/bds_ver_{pt}.json", new string[] { ver });
-        Console.Out.WriteLine($"{pt}-{ver}下载成功");
-        return true;
-    }
-    catch (Exception ex)
-    {
-        Console.Error.WriteLine($"{pt}-{ver}下载失败：{ex.Message}");
-        if (ex.Message.Contains("404"))
-        {
-            return true;
-        }
-        File.AppendAllLines("log.log", new string[] { $"{pt}-{ver}下载失败：{ex.Message}" });
-    }
-    return false;
 }
