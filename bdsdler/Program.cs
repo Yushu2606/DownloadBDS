@@ -2,107 +2,139 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 
-List<int> version = new()
-{
-    1,
-    6,
-    0,
-    0
-};
-List<string> platforms = new()
-{
-    "win",
-    "linux"
-};
-List<Task> tasks = new();
+namespace bdsdler;
 
-Console.Write("开始自：");
-string? input = Console.ReadLine();
-Console.Clear();
-if (!string.IsNullOrWhiteSpace(input))
+internal class Program
 {
-    string[] temp = input.Split('.');
-    for (int i = 0; i < temp.Length; i++)
+    private static readonly List<string> s_bdsWindowsVersions = new();
+    private static readonly List<string> s_bdsLinuxVersions = new();
+    private static readonly List<int> s_version = new()
     {
-        version[i] = Convert.ToInt32(temp[i]);
-    }
-}
-foreach (string platform in platforms)
-{
-    _ = Directory.CreateDirectory(platform);
-}
-for (int i = 0; i < 16; i++)
-{
-    int index = i;
-    Task task = new(() =>
+        1,
+        6,
+        0,
+        0
+    };
+    private static readonly List<string> s_platforms = new()
     {
-        Output(index, index.ToString(), "空闲");
-        while (version[1] <= 20)
+        "win",
+        "linux"
+    };
+    private static void Main()
+    {
+        List<Task> tasks = new();
+        foreach (string platform in s_platforms)
         {
-            Download(platforms, version, index);
-            Output(index, index.ToString(), "空闲");
-        }
-    });
-    task.Start();
-    tasks.Add(task);
-}
-foreach (Task task1 in tasks)
-{
-    task1.Wait();
-}
-Console.SetCursorPosition(0, 16);
-Console.WriteLine("下载完毕");
-
-static void Download(List<string> platforms, List<int> version, int index)
-{
-    string versionstr = $"{version[0]}.{version[1]}.{version[2]}.{(((version[1] >= 16 && version[2] >= 1) || version[1] >= 17) && version[3] is < 10 and > 0 ? $"0{version[3]}" : version[3])}";
-    version[3]++;
-    if (version[3] > 35)
-    {
-        version[3] = 0;
-        version[2]++;
-    }
-    if (version[2] > (version[1] <= 13 ? 5 : 222))
-    {
-        version[2] = 0;
-        version[1]++;
-    }
-    if (version[1] > 20)
-    {
-        version[1]++;
-        return;
-    }
-    foreach (string platform in platforms)
-    {
-        try
-        {
-            Output(index, index.ToString(), platform, versionstr);
-            File.WriteAllBytes(Path.Combine(platform, $"bedrock-server-{versionstr}.zip"), new HttpClient().GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{versionstr}.zip").Result);
-            File.AppendAllText($"bds_ver_{platform}.json", $"{versionstr}\n");
-        }
-        catch (Exception ex)
-        {
-            if (ex.Message.Contains("404"))
+            string fileName = $"bds_ver_{platform}.json";
+            if (!File.Exists(fileName))
             {
-                continue;
+                File.WriteAllText(fileName, JsonSerializer.Serialize(platform switch
+                {
+                    "win" => s_bdsWindowsVersions,
+                    "linux" => s_bdsLinuxVersions,
+                    _ => throw new NotImplementedException(platform)
+                }));
             }
-            Download(platforms, version, index);
+        }
+        Console.Write("开始自：");
+        string input = Console.ReadLine();
+        Console.Clear();
+        if (!string.IsNullOrWhiteSpace(input))
+        {
+            string[] temp = input.Split('.');
+            for (int i = 0; i < temp.Length; i++)
+            {
+                s_version[i] = Convert.ToInt32(temp[i]);
+            }
+        }
+        foreach (string platform in s_platforms)
+        {
+            _ = Directory.CreateDirectory(platform);
+        }
+        for (int i = 0; i < 16; i++)
+        {
+            int index = i;
+            Task task = new(() =>
+            {
+                Output(index, index.ToString(), "空闲");
+                while (s_version[1] <= 20)
+                {
+                    Download(index);
+                    Output(index, index.ToString(), "空闲");
+                }
+            });
+            task.Start();
+            tasks.Add(task);
+        }
+        foreach (Task task1 in tasks)
+        {
+            task1.Wait();
+        }
+        Console.SetCursorPosition(0, 16);
+        Console.WriteLine("下载完毕");
+
+    }
+
+    private static void Download(int index)
+    {
+        string versionstr = $"{s_version[0]}.{s_version[1]}.{s_version[2]}.{(((s_version[1] >= 16 && s_version[2] >= 1) || s_version[1] >= 17) && s_version[3] is < 10 and > 0 ? $"0{s_version[3]}" : s_version[3])}";
+        s_version[3]++;
+        if (s_version[3] > 35)
+        {
+            s_version[3] = 0;
+            s_version[2]++;
+        }
+        if (s_version[2] > (s_version[1] <= 13 ? 5 : 222))
+        {
+            s_version[2] = 0;
+            s_version[1]++;
+        }
+        if (s_version[1] > 20)
+        {
+            s_version[1]++;
+            return;
+        }
+        foreach (string platform in s_platforms)
+        {
+            try
+            {
+                Output(index, index.ToString(), platform, versionstr);
+                HttpClient httpClient = new();
+                File.WriteAllBytes(Path.Combine(platform, $"bedrock-server-{versionstr}.zip"), httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{versionstr}.zip").Result);
+                List<string> vers = platform switch
+                {
+                    "win" => s_bdsWindowsVersions,
+                    "linux" => s_bdsLinuxVersions,
+                    _ => throw new NotImplementedException(platform)
+                };
+                vers.Add(versionstr);
+                File.WriteAllText($"bds_ver_{platform}.json", JsonSerializer.Serialize(vers));
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("404"))
+                {
+                    continue;
+                }
+                Download(index);
+            }
         }
     }
-}
 
-static void Output(int line, params string[] messages)
-{
-    lock (Console.Out)
+    private static void Output(int line, params string[] messages)
     {
-        Console.SetCursorPosition(0, line);
-        foreach (string message in messages)
+        lock (Console.Out)
         {
-            Console.Write($"{messages}    ");
+            Console.SetCursorPosition(0, line);
+            foreach (string message in messages)
+            {
+                Console.Write($"{messages}    ");
+            }
+            Console.WriteLine();
+            Console.SetCursorPosition(0, 0);
         }
-        Console.WriteLine();
-        Console.SetCursorPosition(0, 0);
     }
 }
