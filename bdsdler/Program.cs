@@ -1,4 +1,8 @@
-using System.Net;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 List<int> version = new()
 {
@@ -34,9 +38,11 @@ for (int i = 0; i < 16; i++)
     int index = i;
     Task task = new(() =>
     {
+        Output(index, index.ToString(), "空闲");
         while (version[1] <= 20)
         {
             Download(platforms, version, index);
+            Output(index, index.ToString(), "空闲");
         }
     });
     task.Start();
@@ -72,13 +78,8 @@ static void Download(List<string> platforms, List<int> version, int index)
     {
         try
         {
-            lock (Console.Out)
-            {
-                Console.SetCursorPosition(0, index);
-                Console.WriteLine($"{index}    {platform}    {versionstr}    ");
-                Console.SetCursorPosition(0, 0);
-            }
-            new WebClient().DownloadFile($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{versionstr}.zip", Path.Combine(platform, $"bedrock-server-{versionstr}.zip"));
+            Output(index, index.ToString(), platform, versionstr);
+            File.WriteAllBytes(Path.Combine(platform, $"bedrock-server-{versionstr}.zip"), new HttpClient().GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{versionstr}.zip").Result);
             File.AppendAllText($"bds_ver_{platform}.json", $"{versionstr}\n");
         }
         catch (Exception ex)
@@ -89,5 +90,19 @@ static void Download(List<string> platforms, List<int> version, int index)
             }
             Download(platforms, version, index);
         }
+    }
+}
+
+static void Output(int line, params string[] messages)
+{
+    lock (Console.Out)
+    {
+        Console.SetCursorPosition(0, line);
+        foreach (string message in messages)
+        {
+            Console.Write($"{messages}    ");
+        }
+        Console.WriteLine();
+        Console.SetCursorPosition(0, 0);
     }
 }
