@@ -54,7 +54,7 @@ internal class Program
         {
             _ = Directory.CreateDirectory(platform);
         }
-        for (int i = 0; i < 16; i++)
+        for (int i = 0; i < Environment.ProcessorCount; i++)
         {
             int index = i;
             Task task = new(() =>
