@@ -122,7 +122,7 @@ internal class Program
             Console.SetCursorPosition(0, line);
             foreach (string message in messages)
             {
-                Console.Write($"{messages}    ");
+                Console.Write($"{message}    ");
             }
             Console.WriteLine();
             Console.SetCursorPosition(0, 0);
