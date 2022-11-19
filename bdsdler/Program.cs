@@ -9,8 +9,6 @@ namespace bdsdler;
 
 internal class Program
 {
-    private static readonly List<string> s_bdsWindowsVersions = new();
-    private static readonly List<string> s_bdsLinuxVersions = new();
     private static readonly List<int> s_version = new()
     {
         1,
@@ -18,26 +16,25 @@ internal class Program
         0,
         0
     };
-    private static readonly List<string> s_platforms = new()
+    private static readonly Dictionary<string, List<string>> s_platforms = new()
     {
-        "win",
-        "linux"
+        ["win"] = new(),
+        ["linux"] = new(),
+        ["win-preview"] = new(),
+        ["linux-preview"] = new()
     };
     private static void Main()
     {
         List<Task> tasks = new();
-        foreach (string platform in s_platforms)
+        foreach (KeyValuePair<string, List<string>> platform in s_platforms)
         {
-            string fileName = $"bds_ver_{platform}.json";
+            string fileName = $"bds_ver_{platform.Key}.json";
             if (!File.Exists(fileName))
             {
-                File.WriteAllText(fileName, JsonSerializer.Serialize(platform switch
-                {
-                    "win" => s_bdsWindowsVersions,
-                    "linux" => s_bdsLinuxVersions,
-                    _ => throw new NotImplementedException(platform)
-                }));
+                File.WriteAllText(fileName, JsonSerializer.Serialize(platform.Value));
+                continue;
             }
+            s_platforms[platform.Key] = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(fileName));
         }
         Console.Write("开始自：");
         string input = Console.ReadLine();
@@ -50,9 +47,9 @@ internal class Program
                 s_version[i] = Convert.ToInt32(temp[i]);
             }
         }
-        foreach (string platform in s_platforms)
+        foreach (KeyValuePair<string, List<string>> platform in s_platforms)
         {
-            _ = Directory.CreateDirectory(platform);
+            _ = Directory.CreateDirectory(platform.Key);
         }
         for (int i = 0; i < Environment.ProcessorCount; i++)
         {
@@ -97,21 +94,15 @@ internal class Program
             s_version[1]++;
             return;
         }
-        foreach (string platform in s_platforms)
+        foreach (KeyValuePair<string, List<string>> platform in s_platforms)
         {
             try
             {
-                Output(index, index.ToString(), platform, versionstr);
+                Output(index, index.ToString(), platform.Key, versionstr);
                 HttpClient httpClient = new();
-                File.WriteAllBytes(Path.Combine(platform, $"bedrock-server-{versionstr}.zip"), httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{versionstr}.zip").Result);
-                List<string> vers = platform switch
-                {
-                    "win" => s_bdsWindowsVersions,
-                    "linux" => s_bdsLinuxVersions,
-                    _ => throw new NotImplementedException(platform)
-                };
-                vers.Add(versionstr);
-                File.WriteAllText($"bds_ver_{platform}.json", JsonSerializer.Serialize(vers));
+                File.WriteAllBytes(Path.Combine(platform.Key, $"bedrock-server-{versionstr}.zip"), httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{versionstr}.zip").Result);
+                platform.Value.Add(versionstr);
+                File.WriteAllText($"bds_ver_{platform}.json", JsonSerializer.Serialize(platform.Value));
             }
             catch (Exception ex)
             {
