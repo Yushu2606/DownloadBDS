@@ -100,9 +100,9 @@ internal class Program
             {
                 Output(index, index.ToString(), platform.Key, versionstr);
                 HttpClient httpClient = new();
-                File.WriteAllBytes(Path.Combine(platform.Key, $"bedrock-server-{versionstr}.zip"), httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{versionstr}.zip").Result);
+                File.WriteAllBytes(Path.Combine(platform.Key, $"bedrock-server-{versionstr}.zip"), httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform.Key}/bedrock-server-{versionstr}.zip").Result);
                 platform.Value.Add(versionstr);
-                File.WriteAllText($"bds_ver_{platform}.json", JsonSerializer.Serialize(platform.Value));
+                File.WriteAllText($"bds_ver_{platform.Key}.json", JsonSerializer.Serialize(platform.Value));
             }
             catch (Exception ex)
             {
