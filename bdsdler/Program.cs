@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -59,7 +60,28 @@ internal class Program
                 Output(index, index.ToString(), "空闲");
                 while (s_version[1] <= 20)
                 {
-                    Download(index);
+                    string versionstr = string.Empty;
+                    lock (s_version)
+                    {
+                        versionstr = $"{s_version[0]}.{s_version[1]}.{s_version[2]}.{(((s_version[1] >= 16 && s_version[2] >= 1) || s_version[1] >= 17) && s_version[3] is < 10 and > 0 ? $"0{s_version[3]}" : s_version[3])}";
+                        s_version[3]++;
+                        if (s_version[3] > 35)
+                        {
+                            s_version[3] = 0;
+                            s_version[2]++;
+                        }
+                        if (s_version[2] > (s_version[1] <= 13 ? 5 : 222))
+                        {
+                            s_version[2] = 0;
+                            s_version[1]++;
+                        }
+                        if (s_version[1] > 20)
+                        {
+                            s_version[1]++;
+                            return;
+                        }
+                    }
+                    Download(index, versionstr);
                     Output(index, index.ToString(), "空闲");
                 }
             });
@@ -72,28 +94,10 @@ internal class Program
         }
         Console.SetCursorPosition(0, 16);
         Console.WriteLine("下载完毕");
-
     }
 
-    private static void Download(int index)
+    private static void Download(int index, string versionstr)
     {
-        string versionstr = $"{s_version[0]}.{s_version[1]}.{s_version[2]}.{(((s_version[1] >= 16 && s_version[2] >= 1) || s_version[1] >= 17) && s_version[3] is < 10 and > 0 ? $"0{s_version[3]}" : s_version[3])}";
-        s_version[3]++;
-        if (s_version[3] > 35)
-        {
-            s_version[3] = 0;
-            s_version[2]++;
-        }
-        if (s_version[2] > (s_version[1] <= 13 ? 5 : 222))
-        {
-            s_version[2] = 0;
-            s_version[1]++;
-        }
-        if (s_version[1] > 20)
-        {
-            s_version[1]++;
-            return;
-        }
         foreach (KeyValuePair<string, List<string>> platform in s_platforms)
         {
             try
@@ -110,7 +114,7 @@ internal class Program
                 {
                     continue;
                 }
-                Download(index);
+                Download(index, versionstr);
             }
         }
     }
@@ -124,7 +128,13 @@ internal class Program
             {
                 Console.Write($"{message}    ");
             }
-            Console.WriteLine();
+            StringBuilder trailingSpaces = new();
+            int trailingSpacesCount = Console.WindowWidth - Console.GetCursorPosition().Left;
+            for (int i = 0; i < trailingSpacesCount; i++)
+            {
+                _ = trailingSpaces.Append(' ');
+            }
+            Console.WriteLine(trailingSpaces);
             Console.SetCursorPosition(0, 0);
         }
     }
