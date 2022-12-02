@@ -58,26 +58,26 @@ internal class Program
             Task task = new(() =>
             {
                 Output(index, index.ToString(), "空闲");
-                while (s_version[1] <= 20)
+                while (s_version[1] < 21)
                 {
                     string versionstr = string.Empty;
                     lock (s_version)
                     {
-                        versionstr = $"{s_version[0]}.{s_version[1]}.{s_version[2]}.{(((s_version[1] >= 16 && s_version[2] >= 1) || s_version[1] >= 17) && s_version[3] is < 10 and > 0 ? $"0{s_version[3]}" : s_version[3])}";
+                        versionstr = $"{s_version[0]}.{s_version[1]}.{s_version[2]}.{(((s_version[1] > 15 && s_version[2] > 0) || s_version[1] > 16) && s_version[3] is > 0 and < 10 ? "0" : string.Empty)}{s_version[3]}";
                         s_version[3]++;
                         if (s_version[3] > 35)
                         {
                             s_version[3] = 0;
                             s_version[2]++;
                         }
-                        if (s_version[2] > (s_version[1] <= 13 ? 5 : 222))
+                        if (s_version[2] > (s_version[1] < 14 ? 5 : 222))
                         {
                             s_version[2] = 0;
                             s_version[1]++;
                         }
                         if (s_version[1] > 20)
                         {
-                            s_version[1]++;
+                            s_version[0]++;
                             return;
                         }
                     }
@@ -92,7 +92,7 @@ internal class Program
         {
             task1.Wait();
         }
-        Console.SetCursorPosition(0, 16);
+        Console.SetCursorPosition(0, Environment.ProcessorCount);
         Console.WriteLine("下载完毕");
     }
 
