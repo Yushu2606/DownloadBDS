@@ -27,15 +27,15 @@ internal class Program
     private static void Main()
     {
         List<Task> tasks = new();
-        foreach (KeyValuePair<string, List<string>> platform in s_platforms)
+        foreach ((string platform, List<string> versions) in s_platforms)
         {
-            string fileName = $"bds_ver_{platform.Key}.json";
+            string fileName = $"bds_ver_{platform}.json";
             if (!File.Exists(fileName))
             {
-                File.WriteAllText(fileName, JsonSerializer.Serialize(platform.Value));
+                File.WriteAllText(fileName, JsonSerializer.Serialize(versions));
                 continue;
             }
-            s_platforms[platform.Key] = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(fileName));
+            s_platforms[platform] = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(fileName));
         }
         Console.Write("开始自：");
         string input = Console.ReadLine();
@@ -48,9 +48,9 @@ internal class Program
                 s_version[i] = Convert.ToInt32(temp[i]);
             }
         }
-        foreach (KeyValuePair<string, List<string>> platform in s_platforms)
+        foreach ((string platform, List<string> _) in s_platforms)
         {
-            _ = Directory.CreateDirectory(platform.Key);
+            _ = Directory.CreateDirectory(platform);
         }
         for (int i = 0; i < Environment.ProcessorCount; i++)
         {
@@ -81,7 +81,10 @@ internal class Program
                             return;
                         }
                     }
-                    Download(index, versionstr);
+                    foreach ((string platform, List<string> _) in s_platforms)
+                    {
+                        Download(index, versionstr, platform);
+                    }
                     Output(index, index.ToString(), "空闲");
                 }
             });
@@ -96,27 +99,25 @@ internal class Program
         Console.WriteLine("下载完毕");
     }
 
-    private static void Download(int index, string versionstr)
+    private static void Download(int index, string versionstr, string platformName)
     {
-        foreach (KeyValuePair<string, List<string>> platform in s_platforms)
+        Output(index, index.ToString(), platformName, versionstr);
+        HttpClient httpClient = new();
+        try
         {
-            try
-            {
-                Output(index, index.ToString(), platform.Key, versionstr);
-                HttpClient httpClient = new();
-                File.WriteAllBytes(Path.Combine(platform.Key, $"bedrock-server-{versionstr}.zip"), httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform.Key}/bedrock-server-{versionstr}.zip").Result);
-                platform.Value.Add(versionstr);
-                File.WriteAllText($"bds_ver_{platform.Key}.json", JsonSerializer.Serialize(platform.Value));
-            }
-            catch (Exception ex)
-            {
-                if (ex.Message.Contains("404"))
-                {
-                    continue;
-                }
-                Download(index, versionstr);
-            }
+            File.WriteAllBytes(Path.Combine(platformName, $"bedrock-server-{versionstr}.zip"), httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platformName}/bedrock-server-{versionstr}.zip").Result);
         }
+        catch (Exception ex)
+        {
+            if (ex.Message.Contains("404"))
+            {
+                return;
+            }
+            Download(index, versionstr, platformName);
+            return;
+        }
+        s_platforms[platformName].Add(versionstr);
+        File.WriteAllText($"bds_ver_{platformName}.json", JsonSerializer.Serialize(s_platforms[platformName]));
     }
 
     private static void Output(int line, params string[] messages)
@@ -129,13 +130,12 @@ internal class Program
                 Console.Write($"{message}    ");
             }
             StringBuilder trailingSpaces = new();
-            int trailingSpacesCount = Console.WindowWidth - Console.GetCursorPosition().Left;
+            int trailingSpacesCount = Console.WindowWidth - Console.GetCursorPosition().Left - Environment.NewLine.Length;
             for (int i = 0; i < trailingSpacesCount; i++)
             {
                 _ = trailingSpaces.Append(' ');
             }
             Console.WriteLine(trailingSpaces);
-            Console.SetCursorPosition(0, 0);
         }
     }
 }
