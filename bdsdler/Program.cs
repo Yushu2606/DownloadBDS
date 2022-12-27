@@ -24,7 +24,7 @@ internal class Program
         ["win-preview"] = new(),
         ["linux-preview"] = new()
     };
-    private static void Main()
+    private static async Task Main()
     {
         List<Task> tasks = new();
         foreach ((string platform, List<string> versions) in s_platforms)
@@ -55,7 +55,7 @@ internal class Program
         for (int i = 0; i < Environment.ProcessorCount; i++)
         {
             int index = i;
-            Task task = new(() =>
+            async Task @this()
             {
                 Output(index, index.ToString(), "空闲");
                 while (s_version[1] < 21)
@@ -83,37 +83,36 @@ internal class Program
                     }
                     foreach ((string platform, List<string> _) in s_platforms)
                     {
-                        Download(index, versionstr, platform);
+                        await Download(index, versionstr, platform);
                     }
                     Output(index, index.ToString(), "空闲");
                 }
-            });
-            task.Start();
-            tasks.Add(task);
+            }
+            tasks.Add(@this());
         }
-        foreach (Task task1 in tasks)
+        foreach (Task task in tasks)
         {
-            task1.Wait();
+            await task;
         }
         Console.SetCursorPosition(0, Environment.ProcessorCount);
         Console.WriteLine("下载完毕");
     }
 
-    private static void Download(int index, string versionstr, string platformName)
+    private static async Task Download(int index, string versionstr, string platformName)
     {
         Output(index, index.ToString(), platformName, versionstr);
         HttpClient httpClient = new();
         try
         {
-            File.WriteAllBytes(Path.Combine(platformName, $"bedrock-server-{versionstr}.zip"), httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platformName}/bedrock-server-{versionstr}.zip").Result);
+            File.WriteAllBytes(Path.Combine(platformName, $"bedrock-server-{versionstr}.zip"), await httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platformName}/bedrock-server-{versionstr}.zip"));
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
             if (ex.Message.Contains("404"))
             {
                 return;
             }
-            Download(index, versionstr, platformName);
+            await Download(index, versionstr, platformName);
             return;
         }
         s_platforms[platformName].Add(versionstr);
