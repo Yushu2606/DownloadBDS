@@ -1,12 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
-namespace bdsdler;
+namespace DownloadBDS;
 
 internal class Program
 {
@@ -105,13 +100,11 @@ internal class Program
         try
         {
             File.WriteAllBytes(Path.Combine(platformName, $"bedrock-server-{versionstr}.zip"), await httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platformName}/bedrock-server-{versionstr}.zip"));
-        }
-        catch (HttpRequestException ex)
+        } catch (HttpRequestException ex) when (ex.Message.Contains("404"))
         {
-            if (ex.Message.Contains("404"))
-            {
-                return;
-            }
+            return;
+        } catch
+        {
             await Download(index, versionstr, platformName);
             return;
         }
