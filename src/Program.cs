@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 
@@ -5,13 +6,8 @@ namespace DownloadBDS;
 
 internal class Program
 {
-    private static readonly List<int> s_version = new()
-    {
-        1,
-        6,
-        0,
-        0
-    };
+    private static (int Major, int Minor, int Build, int Revision) s_version =
+        (1, 6, default, default);
     private static readonly Dictionary<string, List<string>> s_platforms = new()
     {
         ["win"] = new(),
@@ -19,6 +15,8 @@ internal class Program
         ["win-preview"] = new(),
         ["linux-preview"] = new()
     };
+    private record Data(string Platform, string Verson);
+    private static readonly ConcurrentQueue<Data> ts_data;
     private static async Task Main()
     {
         List<Task> tasks = new();
@@ -30,7 +28,8 @@ internal class Program
                 File.WriteAllText(fileName, JsonSerializer.Serialize(versions));
                 continue;
             }
-            s_platforms[platform] = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(fileName));
+            s_platforms[platform] =
+                JsonSerializer.Deserialize<List<string>>(File.ReadAllText(fileName));
         }
         Console.Write("开始自：");
         string input = Console.ReadLine();
@@ -40,48 +39,63 @@ internal class Program
             string[] temp = input.Split('.');
             for (int i = 0; i < temp.Length; i++)
             {
-                s_version[i] = Convert.ToInt32(temp[i]);
+                switch (i)
+                {
+                    case 0:
+                        s_version.Major = Convert.ToInt32(temp[i]);
+                        break;
+                    case 1:
+                        s_version.Minor = Convert.ToInt32(temp[i]);
+                        break;
+                    case 2:
+                        s_version.Build = Convert.ToInt32(temp[i]);
+                        break;
+                    case 3:
+                        s_version.Revision = Convert.ToInt32(temp[i]);
+                        break;
+                    default:
+                        throw new IndexOutOfRangeException();
+                }
             }
         }
         foreach (string platform in s_platforms.Keys)
         {
             Directory.CreateDirectory(platform);
         }
+        while (s_version.Minor < 21)
+        {
+            string version = $"{s_version.Major}.{s_version.Minor}.{s_version.Build}.{((s_version.Minor > 15 && s_version.Build > 0 || s_version.Minor > 16) && s_version.Revision is > 0 and < 10 ? "0" : string.Empty)}{s_version.Revision}";
+            s_version.Revision++;
+            if (s_version.Revision > 35)
+            {
+                s_version.Revision = 0;
+                s_version.Build++;
+            }
+            if (s_version.Build > (s_version.Minor < 14 ? 5 : 222))
+            {
+                s_version.Build = 0;
+                s_version.Minor++;
+            }
+            if (s_version.Minor > 20)
+            {
+                s_version.Major++;
+                return;
+            }
+            foreach (string platform in s_platforms.Keys)
+            {
+                ts_data.Enqueue(new(platform, version));
+            }
+        }
         for (int i = 0; i < Environment.ProcessorCount * 2; i++)
         {
             int index = i;
             async Task @this()
             {
-                Output(index, index.ToString(), "空闲");
-                while (s_version[1] < 21)
+                while (ts_data.TryDequeue(out Data data))
                 {
-                    string versionstr = string.Empty;
-                    lock (s_version)
-                    {
-                        versionstr = $"{s_version[0]}.{s_version[1]}.{s_version[2]}.{((s_version[1] > 15 && s_version[2] > 0 || s_version[1] > 16) && s_version[3] is > 0 and < 10 ? "0" : string.Empty)}{s_version[3]}";
-                        s_version[3]++;
-                        if (s_version[3] > 35)
-                        {
-                            s_version[3] = 0;
-                            s_version[2]++;
-                        }
-                        if (s_version[2] > (s_version[1] < 14 ? 5 : 222))
-                        {
-                            s_version[2] = 0;
-                            s_version[1]++;
-                        }
-                        if (s_version[1] > 20)
-                        {
-                            s_version[0]++;
-                            return;
-                        }
-                    }
-                    foreach ((string platform, List<string> _) in s_platforms)
-                    {
-                        await Download(index, versionstr, platform);
-                    }
-                    Output(index, index.ToString(), "空闲");
+                    await Download(i, data.Platform, data.Verson);
                 }
+                Output(index, index.ToString(), "空闲");
             }
             tasks.Add(@this());
         }
@@ -93,13 +107,14 @@ internal class Program
         Console.WriteLine("下载完毕");
     }
 
-    private static async Task Download(int index, string versionstr, string platformName)
+    private static async Task Download(int index, string platform, string version)
     {
-        Output(index, index.ToString(), platformName, versionstr);
+        Output(index, index.ToString(), platform, version);
         HttpClient httpClient = new();
         try
         {
-            File.WriteAllBytes(Path.Combine(platformName, $"bedrock-server-{versionstr}.zip"), await httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platformName}/bedrock-server-{versionstr}.zip"));
+            File.WriteAllBytes(Path.Combine(platform, $"bedrock-server-{version}.zip"),
+                await httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{version}.zip"));
         }
         catch (HttpRequestException ex) when (ex.Message.Contains("404"))
         {
@@ -107,11 +122,11 @@ internal class Program
         }
         catch
         {
-            await Download(index, versionstr, platformName);
+            await Download(index, platform, version);
             return;
         }
-        s_platforms[platformName].Add(versionstr);
-        File.WriteAllText($"bds_ver_{platformName}.json", JsonSerializer.Serialize(s_platforms[platformName]));
+        s_platforms[platform].Add(version);
+        File.WriteAllText($"bds_ver_{platform}.json", JsonSerializer.Serialize(s_platforms[platform]));
     }
 
     private static void Output(int line, params string[] messages)
@@ -121,10 +136,12 @@ internal class Program
             Console.SetCursorPosition(0, line);
             foreach (string message in messages)
             {
-                Console.Write($"{message}    ");
+                Console.Write($"{message,4}");
             }
             StringBuilder trailingSpaces = new();
-            int trailingSpacesCount = Console.WindowWidth - Console.GetCursorPosition().Left - Environment.NewLine.Length;
+            int trailingSpacesCount = Console.WindowWidth -
+                Console.GetCursorPosition().Left -
+                Environment.NewLine.Length;
             for (int i = 0; i < trailingSpacesCount; i++)
             {
                 trailingSpaces.Append(' ');
