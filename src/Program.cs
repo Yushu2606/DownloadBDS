@@ -43,11 +43,11 @@ internal class Program
                 s_version[i] = Convert.ToInt32(temp[i]);
             }
         }
-        foreach ((string platform, List<string> _) in s_platforms)
+        foreach (string platform in s_platforms.Keys)
         {
-            _ = Directory.CreateDirectory(platform);
+            Directory.CreateDirectory(platform);
         }
-        for (int i = 0; i < Environment.ProcessorCount; i++)
+        for (int i = 0; i < Environment.ProcessorCount * 2; i++)
         {
             int index = i;
             async Task @this()
@@ -58,7 +58,7 @@ internal class Program
                     string versionstr = string.Empty;
                     lock (s_version)
                     {
-                        versionstr = $"{s_version[0]}.{s_version[1]}.{s_version[2]}.{(((s_version[1] > 15 && s_version[2] > 0) || s_version[1] > 16) && s_version[3] is > 0 and < 10 ? "0" : string.Empty)}{s_version[3]}";
+                        versionstr = $"{s_version[0]}.{s_version[1]}.{s_version[2]}.{((s_version[1] > 15 && s_version[2] > 0 || s_version[1] > 16) && s_version[3] is > 0 and < 10 ? "0" : string.Empty)}{s_version[3]}";
                         s_version[3]++;
                         if (s_version[3] > 35)
                         {
@@ -100,10 +100,12 @@ internal class Program
         try
         {
             File.WriteAllBytes(Path.Combine(platformName, $"bedrock-server-{versionstr}.zip"), await httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platformName}/bedrock-server-{versionstr}.zip"));
-        } catch (HttpRequestException ex) when (ex.Message.Contains("404"))
+        }
+        catch (HttpRequestException ex) when (ex.Message.Contains("404"))
         {
             return;
-        } catch
+        }
+        catch
         {
             await Download(index, versionstr, platformName);
             return;
@@ -125,7 +127,7 @@ internal class Program
             int trailingSpacesCount = Console.WindowWidth - Console.GetCursorPosition().Left - Environment.NewLine.Length;
             for (int i = 0; i < trailingSpacesCount; i++)
             {
-                _ = trailingSpaces.Append(' ');
+                trailingSpaces.Append(' ');
             }
             Console.WriteLine(trailingSpaces);
         }
