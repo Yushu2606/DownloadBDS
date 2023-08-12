@@ -9,6 +9,7 @@ internal class Program
     private static (int Major, int Minor, int Build, int Revision) s_version;
     private static readonly Dictionary<string, List<string>> s_platforms;
     private static readonly ConcurrentQueue<(string Platform, string Verson)> ts_data;
+    private static bool s_finished;
 
     static Program()
     {
@@ -21,6 +22,7 @@ internal class Program
             ["linux-preview"] = new()
         };
         ts_data = new();
+        s_finished = false;
     }
 
     private static async Task Main()
@@ -68,40 +70,47 @@ internal class Program
         {
             Directory.CreateDirectory(platform);
         }
-        while (s_version.Minor < 21)
+        _ = Task.Run(() =>
         {
-            string version = $"{s_version.Major}.{s_version.Minor}.{s_version.Build}.{((s_version.Minor > 15 && s_version.Build > 0 || s_version.Minor > 16) && s_version.Revision is > 0 and < 10 ? "0" : string.Empty)}{s_version.Revision}";
-            s_version.Revision++;
-            if (s_version.Revision > 35)
+            while (s_version.Minor < 21)
             {
-                s_version.Revision = 0;
-                s_version.Build++;
+                string version = $"{s_version.Major}.{s_version.Minor}.{s_version.Build}.{((s_version.Minor > 15 && s_version.Build > 0 || s_version.Minor > 16) && s_version.Revision is > 0 and < 10 ? "0" : string.Empty)}{s_version.Revision}";
+                s_version.Revision++;
+                if (s_version.Revision > 35)
+                {
+                    s_version.Revision = 0;
+                    s_version.Build++;
+                }
+                if (s_version.Build > (s_version.Minor < 14 ? 5 : 222))
+                {
+                    s_version.Build = 0;
+                    s_version.Minor++;
+                }
+                if (s_version.Minor > 20)
+                {
+                    s_version.Major++;
+                    return;
+                }
+                foreach (string platform in s_platforms.Keys)
+                {
+                    ts_data.Enqueue((platform, version));
+                }
             }
-            if (s_version.Build > (s_version.Minor < 14 ? 5 : 222))
-            {
-                s_version.Build = 0;
-                s_version.Minor++;
-            }
-            if (s_version.Minor > 20)
-            {
-                s_version.Major++;
-                return;
-            }
-            foreach (string platform in s_platforms.Keys)
-            {
-                ts_data.Enqueue((platform, version));
-            }
-        }
+            s_finished = true;
+        });
         for (int i = 0; i < Environment.ProcessorCount * 2; i++)
         {
             int index = i;
             async Task @this()
             {
-                while (ts_data.TryDequeue(out (string Platform, string Verson) data))
+                while (!s_finished)
                 {
-                    await Download(i, data.Platform, data.Verson);
+                    while (ts_data.TryDequeue(out (string Platform, string Verson) data))
+                    {
+                        await Download(index, data.Platform, data.Verson);
+                    }
+                    Output(index, index.ToString(), "空闲");
                 }
-                Output(index, index.ToString(), "空闲");
             }
             tasks.Add(@this());
         }
@@ -132,7 +141,8 @@ internal class Program
             return;
         }
         s_platforms[platform].Add(version);
-        File.WriteAllText($"bds_ver_{platform}.json", JsonSerializer.Serialize(s_platforms[platform]));
+        File.WriteAllText($"bds_ver_{platform}.json",
+            JsonSerializer.Serialize(s_platforms[platform]));
     }
 
     private static void Output(int line, params string[] messages)
@@ -142,7 +152,7 @@ internal class Program
             Console.SetCursorPosition(0, line);
             foreach (string message in messages)
             {
-                Console.Write($"{message,4}");
+                Console.Write($"{message,-16}");
             }
             StringBuilder trailingSpaces = new();
             int trailingSpacesCount = Console.WindowWidth -
