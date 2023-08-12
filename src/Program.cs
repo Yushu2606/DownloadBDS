@@ -8,7 +8,7 @@ internal class Program
 {
     private static (int Major, int Minor, int Build, int Revision) s_version;
     private static readonly Dictionary<string, List<string>> s_platforms;
-    private static readonly ConcurrentQueue<(string Platform, string Verson)> ts_data;
+    private static readonly ConcurrentBag<(string Platform, string Verson)> ts_data;
     private static bool s_finished;
 
     static Program()
@@ -93,7 +93,7 @@ internal class Program
                 }
                 foreach (string platform in s_platforms.Keys)
                 {
-                    ts_data.Enqueue((platform, version));
+                    ts_data.Add((platform, version));
                 }
             }
             s_finished = true;
@@ -105,7 +105,7 @@ internal class Program
             {
                 while (!s_finished)
                 {
-                    while (ts_data.TryDequeue(out (string Platform, string Verson) data))
+                    while (ts_data.TryTake(out (string Platform, string Verson) data))
                     {
                         await Download(index, data.Platform, data.Verson);
                     }
