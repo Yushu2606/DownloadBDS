@@ -6,17 +6,23 @@ namespace DownloadBDS;
 
 internal class Program
 {
-    private static (int Major, int Minor, int Build, int Revision) s_version =
-        (1, 6, default, default);
-    private static readonly Dictionary<string, List<string>> s_platforms = new()
+    private static (int Major, int Minor, int Build, int Revision) s_version;
+    private static readonly Dictionary<string, List<string>> s_platforms;
+    private static readonly ConcurrentQueue<(string Platform, string Verson)> ts_data;
+
+    static Program()
     {
-        ["win"] = new(),
-        ["linux"] = new(),
-        ["win-preview"] = new(),
-        ["linux-preview"] = new()
-    };
-    private record Data(string Platform, string Verson);
-    private static readonly ConcurrentQueue<Data> ts_data;
+        s_version = (1, 6, default, default);
+        s_platforms = new()
+        {
+            ["win"] = new(),
+            ["linux"] = new(),
+            ["win-preview"] = new(),
+            ["linux-preview"] = new()
+        };
+        ts_data = new();
+    }
+
     private static async Task Main()
     {
         List<Task> tasks = new();
@@ -83,7 +89,7 @@ internal class Program
             }
             foreach (string platform in s_platforms.Keys)
             {
-                ts_data.Enqueue(new(platform, version));
+                ts_data.Enqueue((platform, version));
             }
         }
         for (int i = 0; i < Environment.ProcessorCount * 2; i++)
@@ -91,7 +97,7 @@ internal class Program
             int index = i;
             async Task @this()
             {
-                while (ts_data.TryDequeue(out Data data))
+                while (ts_data.TryDequeue(out (string Platform, string Verson) data))
                 {
                     await Download(i, data.Platform, data.Verson);
                 }
