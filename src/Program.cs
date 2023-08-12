@@ -62,6 +62,7 @@ internal class Program
         Console.Write("开始自：");
         string? input = Console.ReadLine();
         Console.Clear();
+        Console.CursorVisible = false;
         if (!string.IsNullOrWhiteSpace(input))
         {
             string[] temp = input.Split('.');
@@ -193,7 +194,7 @@ internal class Program
             Console.SetCursorPosition(0, line);
             foreach (string message in messages)
             {
-                Console.Write($"{message,-16}");
+                Console.Write($"{message,-10}");
             }
             StringBuilder trailingSpaces = new();
             int trailingSpacesCount = Console.WindowWidth -
