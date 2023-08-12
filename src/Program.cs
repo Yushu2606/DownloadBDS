@@ -8,7 +8,7 @@ internal class Program
 {
     private static Version s_version;
     private static readonly ConcurrentBag<(Platform Platform, bool IsPreviewVersion, Version Verson)> ts_data;
-    private static Dictionary<Version, PreviewVersion> s_processedData;
+    private static Dictionary<string, PreviewVersion> s_processedData;
     private static bool s_finished;
 
     public struct Version
@@ -57,7 +57,7 @@ internal class Program
         if (File.Exists("ProcessedData.json"))
         {
             s_processedData =
-                JsonSerializer.Deserialize<Dictionary<Version, PreviewVersion>>(File.ReadAllText("ProcessedData.json")) ?? s_processedData;
+                JsonSerializer.Deserialize<Dictionary<string, PreviewVersion>>(File.ReadAllText("ProcessedData.json")) ?? s_processedData;
         }
         Console.Write("开始自：");
         string? input = Console.ReadLine();
@@ -170,17 +170,17 @@ internal class Program
             await Download(index, platform, isPreviewVersion, version);
             return;
         }
-        if (!s_processedData.ContainsKey(version))
+        if (!s_processedData.ContainsKey(version.ToString()))
         {
-            s_processedData[version] = new();
+            s_processedData[version.ToString()] = new();
         }
         switch (platform)
         {
             case Platform.Linux:
-                s_processedData[version].Linux = isPreviewVersion;
+                s_processedData[version.ToString()].Linux = isPreviewVersion;
                 break;
             case Platform.Windows:
-                s_processedData[version].Windows = isPreviewVersion;
+                s_processedData[version.ToString()].Windows = isPreviewVersion;
                 break;
         }
         File.WriteAllText("ProcessedData.json",
