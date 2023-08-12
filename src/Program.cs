@@ -6,41 +6,61 @@ namespace DownloadBDS;
 
 internal class Program
 {
-    private static (int Major, int Minor, int Build, int Revision) s_version;
-    private static readonly Dictionary<string, List<string>> s_platforms;
-    private static readonly ConcurrentBag<(string Platform, string Verson)> ts_data;
+    private static Version s_version;
+    private static readonly ConcurrentBag<(Platform Platform, bool IsPreviewVersion, Version Verson)> ts_data;
+    private static Dictionary<Version, PreviewVersion> s_processedData;
     private static bool s_finished;
+
+    public struct Version
+    {
+        public Version(int major, int minor, int build, int revision)
+        {
+            Major = major;
+            Minor = minor;
+            Build = build;
+            Revision = revision;
+        }
+
+        public int Major { get; set; }
+        public int Minor { get; set; }
+        public int Build { get; set; }
+        public int Revision { get; set; }
+
+        public override readonly string ToString()
+        {
+            return $"{Major}.{Minor}.{Build}.{((Minor > 15 && Build > 0 || Minor > 16) && Revision is > 0 and < 10 ? "0" : string.Empty)}{Revision}";
+        }
+    }
+    public class PreviewVersion
+    {
+        public bool? Linux { get; set; }
+        public bool? Windows { get; set; }
+    }
+
+    private enum Platform
+    {
+        Linux,
+        Windows
+    }
 
     static Program()
     {
-        s_version = (1, 6, default, default);
-        s_platforms = new()
-        {
-            ["win"] = new(),
-            ["linux"] = new(),
-            ["win-preview"] = new(),
-            ["linux-preview"] = new()
-        };
+        s_version = new(1, 6, default, default);
         ts_data = new();
+        s_processedData = new();
         s_finished = false;
     }
 
     private static async Task Main()
     {
         List<Task> tasks = new();
-        foreach ((string platform, List<string> versions) in s_platforms)
+        if (File.Exists("ProcessedData.json"))
         {
-            string fileName = $"bds_ver_{platform}.json";
-            if (!File.Exists(fileName))
-            {
-                File.WriteAllText(fileName, JsonSerializer.Serialize(versions));
-                continue;
-            }
-            s_platforms[platform] =
-                JsonSerializer.Deserialize<List<string>>(File.ReadAllText(fileName));
+            s_processedData =
+                JsonSerializer.Deserialize<Dictionary<Version, PreviewVersion>>(File.ReadAllText("ProcessedData.json")) ?? s_processedData;
         }
         Console.Write("开始自：");
-        string input = Console.ReadLine();
+        string? input = Console.ReadLine();
         Console.Clear();
         if (!string.IsNullOrWhiteSpace(input))
         {
@@ -66,15 +86,14 @@ internal class Program
                 }
             }
         }
-        foreach (string platform in s_platforms.Keys)
-        {
-            Directory.CreateDirectory(platform);
-        }
+        Directory.CreateDirectory("Linux");
+        Directory.CreateDirectory("Linux/Preview");
+        Directory.CreateDirectory("Windows");
+        Directory.CreateDirectory("Windows/Preview");
         _ = Task.Run(() =>
         {
             while (s_version.Minor < 21)
             {
-                string version = $"{s_version.Major}.{s_version.Minor}.{s_version.Build}.{((s_version.Minor > 15 && s_version.Build > 0 || s_version.Minor > 16) && s_version.Revision is > 0 and < 10 ? "0" : string.Empty)}{s_version.Revision}";
                 s_version.Revision++;
                 if (s_version.Revision > 35)
                 {
@@ -91,10 +110,10 @@ internal class Program
                     s_version.Major++;
                     return;
                 }
-                foreach (string platform in s_platforms.Keys)
-                {
-                    ts_data.Add((platform, version));
-                }
+                ts_data.Add((Platform.Linux, false, s_version));
+                ts_data.Add((Platform.Linux, true, s_version));
+                ts_data.Add((Platform.Windows, false, s_version));
+                ts_data.Add((Platform.Windows, true, s_version));
             }
             s_finished = true;
         });
@@ -105,9 +124,9 @@ internal class Program
             {
                 while (!s_finished)
                 {
-                    while (ts_data.TryTake(out (string Platform, string Verson) data))
+                    while (ts_data.TryTake(out (Platform Platform, bool IsPreviewVersion, Version Verson) data))
                     {
-                        await Download(index, data.Platform, data.Verson);
+                        await Download(index, data.Platform, data.IsPreviewVersion, data.Verson);
                     }
                     Output(index, index.ToString(), "空闲");
                 }
@@ -122,14 +141,24 @@ internal class Program
         Console.WriteLine("下载完毕");
     }
 
-    private static async Task Download(int index, string platform, string version)
+    private static async Task Download(int index, Platform platform, bool isPreviewVersion, Version version)
     {
-        Output(index, index.ToString(), platform, version);
+        Output(index, index.ToString(), platform.ToString(), isPreviewVersion.ToString(), version.ToString());
+        string platformString = platform switch
+        {
+            Platform.Linux => "linux",
+            Platform.Windows => "win",
+            _ => throw new IndexOutOfRangeException()
+        };
+        if (isPreviewVersion)
+        {
+            platformString += "-preview";
+        }
         HttpClient httpClient = new();
         try
         {
-            File.WriteAllBytes(Path.Combine(platform, $"bedrock-server-{version}.zip"),
-                await httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platform}/bedrock-server-{version}.zip"));
+            File.WriteAllBytes(Path.Combine(platform.ToString(), isPreviewVersion ? "Preview" : string.Empty, $"bedrock-server-{version}.zip"),
+                await httpClient.GetByteArrayAsync($"https://minecraft.azureedge.net/bin-{platformString}/bedrock-server-{version}.zip"));
         }
         catch (HttpRequestException ex) when (ex.Message.Contains("404"))
         {
@@ -137,12 +166,24 @@ internal class Program
         }
         catch
         {
-            await Download(index, platform, version);
+            await Download(index, platform, isPreviewVersion, version);
             return;
         }
-        s_platforms[platform].Add(version);
-        File.WriteAllText($"bds_ver_{platform}.json",
-            JsonSerializer.Serialize(s_platforms[platform]));
+        if (!s_processedData.ContainsKey(version))
+        {
+            s_processedData[version] = new();
+        }
+        switch (platform)
+        {
+            case Platform.Linux:
+                s_processedData[version].Linux = isPreviewVersion;
+                break;
+            case Platform.Windows:
+                s_processedData[version].Windows = isPreviewVersion;
+                break;
+        }
+        File.WriteAllText("ProcessedData.json",
+            JsonSerializer.Serialize(s_processedData));
     }
 
     private static void Output(int line, params string[] messages)
