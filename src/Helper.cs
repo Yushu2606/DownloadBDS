@@ -16,7 +16,7 @@ internal static class Helper
         {
             s_processedData =
                 JsonSerializer.Deserialize<Dictionary<string, PreviewVersion>>(
-                    File.ReadAllText(ProcessedDataSavePath)) ?? [];
+                    File.ReadAllText(ProcessedDataSavePath))!;
         }
 
         s_processedData ??= [];
