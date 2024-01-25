@@ -43,6 +43,7 @@ Task task = Task.Run(() =>
         data.Add((Platform.Windows, true, version));
     }
 });
+await task.ConfigureAwait(false);
 Directory.CreateDirectory("Linux");
 Directory.CreateDirectory("Windows");
 Directory.CreateDirectory(Path.Combine("Linux", "Preview"));
